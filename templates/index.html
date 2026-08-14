@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>QuizCraft AI</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+        }
+
+        .app {
+            max-width: 800px;
+            height: 100vh;
+            margin: auto;
+            background: white;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ================= HEADER ================= */
+
+        .header {
+            background: #4f46e5;
+            color: white;
+            padding: 18px 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .bot {
+            width: 45px;
+            height: 45px;
+            background: white;
+            color: #4f46e5;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .header h2 {
+            margin: 0;
+        }
+
+        .header p {
+            margin: 4px 0 0;
+            opacity: 0.8;
+        }
+
+        /* ================= CHAT ================= */
+
+        .chat {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 18px;
+            display: flex;
+        }
+
+        .ai {
+            justify-content: flex-start;
+        }
+
+        .user {
+            justify-content: flex-end;
+        }
+
+        .bubble {
+            max-width: 80%;
+            padding: 14px 18px;
+            border-radius: 18px;
+            line-height: 1.5;
+        }
+
+        .ai .bubble {
+            background: #eef0ff;
+            color: #222;
+            border-bottom-left-radius: 5px;
+        }
+
+        .user .bubble {
+            background: #4f46e5;
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        /* ================= OPTIONS ================= */
+
+        .options {
+            margin-top: 15px;
+        }
+
+        .option {
+            display: block;
+            width: 100%;
+            padding: 13px;
+            margin: 9px 0;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background: white;
+            cursor: pointer;
+            text-align: left;
+            font-size: 15px;
+            transition: 0.2s;
+        }
+
+        .option:hover {
+            background: #eef0ff;
+            border-color: #4f46e5;
+        }
+
+        .option:disabled {
+            cursor: not-allowed;
+        }
+
+        .correct {
+            background: #d1fae5 !important;
+            border-color: #16a34a !important;
+        }
+
+        .wrong {
+            background: #fee2e2 !important;
+            border-color: #dc2626 !important;
+        }
+
+        /* ================= INPUT ================= */
+
+        .input-area {
+            padding: 15px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            gap: 10px;
+            background: white;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 14px;
+            border: 1px solid #ccc;
+            border-radius: 25px;
+            outline: none;
+            font-size: 16px;
+        }
+
+        .input-area input:focus {
+            border-color: #4f46e5;
+        }
+
+        .input-area button {
+            border: none;
+            background: #4f46e5;
+            color: white;
+            padding: 0 22px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .input-area button:hover {
+            background: #4338ca;
+        }
+
+        /* ================= SCORE ================= */
+
+        .score-box {
+            text-align: center;
+            padding: 20px;
+            background: #eef0ff;
+            border-radius: 15px;
+            margin-top: 10px;
+        }
+
+        .score-number {
+            font-size: 30px;
+            font-weight: bold;
+            color: #4f46e5;
+        }
+
+        .restart-btn {
+            margin-top: 15px;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 25px;
+            background: #4f46e5;
+            color: white;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        /* ================= MOBILE ================= */
+
+        @media (max-width: 600px) {
+
+            .app {
+                width: 100%;
+            }
+
+            .chat {
+                padding: 15px;
+            }
+
+            .bubble {
+                max-width: 90%;
+            }
+
+            .header {
+                padding: 15px;
+            }
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="app">
+
+
+    <!-- ================= HEADER ================= -->
+
+    <div class="header">
+
+        <div class="bot">
+            🤖
+        </div>
+
+        <div>
+
+            <h2>QuizCraft AI</h2>
+
+            <p>AI Quiz Assistant</p>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================= CHAT ================= -->
+
+    <div class="chat" id="chat">
+
+        <div class="message ai">
+
+            <div class="bubble">
+
+                👋 Hi! I'm <b>QuizCraft AI</b>.
+
+                <br><br>
+
+                Tell me a subject and how many questions you want. 🎯
+
+                <br><br>
+
+                Example:
+
+                <br>
+
+                <b>give me 5 questions for python</b>
+
+                <br>
+
+                <b>give me 9 questions for java</b>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ================= INPUT ================= -->
+
+    <div class="input-area">
+
+        <input
+            type="text"
+            id="subject"
+            placeholder="e.g. give me 5 questions for python"
+            onkeydown="handleEnter(event)"
+        >
+
+        <button onclick="generateQuiz()">
+            Send ➤
+        </button>
+
+    </div>
+
+
+</div>
+
+
+
+<script>
+
+
+/* =====================================================
+   QUIZ VARIABLES
+===================================================== */
+
+let questions = [];
+
+let currentQuestion = 0;
+
+let score = 0;
+
+let quizFinished = false;
+
+
+
+/* =====================================================
+   ADD AI MESSAGE
+===================================================== */
+
+function addAIMessage(text) {
+
+    const chat = document.getElementById("chat");
+
+    const message = document.createElement("div");
+
+    message.className = "message ai";
+
+    message.innerHTML = `
+        <div class="bubble">
+            ${text}
+        </div>
+    `;
+
+    chat.appendChild(message);
+
+    chat.scrollTop = chat.scrollHeight;
+}
+
+
+
+/* =====================================================
+   ADD USER MESSAGE
+===================================================== */
+
+function addUserMessage(text) {
+
+    const chat = document.getElementById("chat");
+
+    const message = document.createElement("div");
+
+    message.className = "message user";
+
+    message.innerHTML = `
+        <div class="bubble">
+            ${escapeHTML(text)}
+        </div>
+    `;
+
+    chat.appendChild(message);
+
+    chat.scrollTop = chat.scrollHeight;
+}
+
+
+
+/* =====================================================
+   ENTER KEY
+===================================================== */
+
+function handleEnter(event) {
+
+    if (event.key === "Enter") {
+
+        generateQuiz();
+
+    }
+
+}
+
+
+
+/* =====================================================
+   GENERATE QUIZ
+===================================================== */
+
+async function generateQuiz() {
+
+    const input = document.getElementById("subject");
+
+    const userText = input.value.trim();
+
+
+    if (userText === "") {
+
+        return;
+
+    }
+
+
+    /* Show user message */
+
+    addUserMessage(userText);
+
+
+    /* Clear input */
+
+    input.value = "";
+
+
+    /* Loading message */
+
+    addAIMessage("🤔 Creating your quiz...");
+
+
+    try {
+
+
+        const response = await fetch("/generate-quiz", {
+
+            method: "POST",
+
+            headers: {
+
+                "Content-Type": "application/json"
+
+            },
+
+            body: JSON.stringify({
+
+                subject: userText
+
+            })
+
+        });
+
+
+        const data = await response.json();
+
+
+        console.log("Backend response:", data);
+
+
+        /* Backend error */
+
+        if (!response.ok || !data.success) {
+
+            addAIMessage(
+                "❌ " + (data.error || "Quiz generation failed.")
+            );
+
+            return;
+
+        }
+
+
+        /* Get questions */
+
+        questions = data.questions || [];
+
+
+        currentQuestion = 0;
+
+        score = 0;
+
+        quizFinished = false;
+
+
+        if (questions.length === 0) {
+
+            addAIMessage(
+                "❌ No questions were generated."
+            );
+
+            return;
+
+        }
+
+
+        /* Quiz ready */
+
+        setTimeout(function() {
+
+            addAIMessage(
+
+                `🎯 Great! I created
+                <b>${questions.length}</b>
+                questions for
+                <b>${escapeHTML(data.subject)}</b>.
+                <br><br>
+                Let's start! 🚀`
+
+            );
+
+
+            setTimeout(function() {
+
+                showQuestion();
+
+            }, 700);
+
+
+        }, 500);
+
+
+    }
+
+
+    catch (error) {
+
+
+        console.error("Error:", error);
+
+
+        addAIMessage(
+
+            "❌ Cannot connect to Flask server. " +
+            "Please check whether app.py is running."
+
+        );
+
+    }
+
+}
+
+
+
+/* =====================================================
+   SHOW QUESTION
+===================================================== */
+
+function showQuestion() {
+
+
+    if (!questions || questions.length === 0) {
+
+        addAIMessage(
+            "❌ No questions available."
+        );
+
+        return;
+
+    }
+
+
+    /* Quiz completed */
+
+    if (currentQuestion >= questions.length) {
+
+        showScore();
+
+        return;
+
+    }
+
+
+    const q = questions[currentQuestion];
+
+
+    let optionsHTML = `
+
+        <div class="options">
+
+    `;
+
+
+    q.options.forEach(function(option, index) {
+
+
+        optionsHTML += `
+
+            <button
+                class="option"
+                id="option-${index}"
+                onclick="selectAnswer(${index})"
+            >
+
+                ${escapeHTML(option)}
+
+            </button>
+
+        `;
+
+    });
+
+
+    optionsHTML += `
+
+        </div>
+
+    `;
+
+
+    addAIMessage(
+
+        `<b>Question ${currentQuestion + 1}
+        of ${questions.length}</b>
+
+        <br><br>
+
+        ${escapeHTML(q.question)}
+
+        ${optionsHTML}`
+
+    );
+
+}
+
+
+
+/* =====================================================
+   SELECT ANSWER
+===================================================== */
+
+function selectAnswer(index) {
+
+
+    if (quizFinished) {
+
+        return;
+
+    }
+
+
+    const q = questions[currentQuestion];
+
+
+    const selectedAnswer = q.options[index];
+
+
+    /* Prevent multiple clicks */
+
+    const buttons =
+        document.querySelectorAll(".option");
+
+
+    buttons.forEach(function(button) {
+
+        button.disabled = true;
+
+    });
+
+
+    /* User selected answer */
+
+    addUserMessage(selectedAnswer);
+
+
+    /* Correct */
+
+    if (selectedAnswer === q.answer) {
+
+
+        score++;
+
+
+        const selectedButton =
+            document.getElementById(`option-${index}`);
+
+
+        if (selectedButton) {
+
+            selectedButton.classList.add("correct");
+
+        }
+
+
+        addAIMessage(
+
+            "🎉 <b>Correct!</b> Great job! ✅"
+
+        );
+
+    }
+
+
+    /* Wrong */
+
+    else {
+
+
+        const selectedButton =
+            document.getElementById(`option-${index}`);
+
+
+        if (selectedButton) {
+
+            selectedButton.classList.add("wrong");
+
+        }
+
+
+        /* Find correct answer */
+
+        buttons.forEach(function(button) {
+
+            if (
+                button.innerText.trim()
+                === q.answer.trim()
+            ) {
+
+                button.classList.add("correct");
+
+            }
+
+        });
+
+
+        addAIMessage(
+
+            `❌ <b>Wrong!</b>
+
+            <br>
+
+            Correct answer:
+            <b>${escapeHTML(q.answer)}</b>`
+
+        );
+
+    }
+
+
+    /* Next question */
+
+    currentQuestion++;
+
+
+    setTimeout(function() {
+
+        showQuestion();
+
+    }, 1200);
+
+}
+
+
+
+/* =====================================================
+   SHOW SCORE
+===================================================== */
+
+function showScore() {
+
+
+    quizFinished = true;
+
+
+    let message = "";
+
+
+    if (score === questions.length) {
+
+        message = "🔥 Perfect score! You're amazing!";
+
+    }
+
+    else if (score >= questions.length / 2) {
+
+        message = "👍 Good job! Keep practicing!";
+
+    }
+
+    else {
+
+        message = "💪 Keep learning and try again!";
+
+    }
+
+
+    addAIMessage(
+
+        `
+
+        <div class="score-box">
+
+            🏆 <b>Quiz Completed!</b>
+
+            <br><br>
+
+            Your Score
+
+            <br>
+
+            <span class="score-number">
+                ${score} / ${questions.length}
+            </span>
+
+            <br><br>
+
+            ${message}
+
+            <br>
+
+            <button
+                class="restart-btn"
+                onclick="restartQuiz()"
+            >
+                🔄 New Quiz
+            </button>
+
+        </div>
+
+        `
+
+    );
+
+}
+
+
+
+/* =====================================================
+   RESTART QUIZ
+===================================================== */
+
+function restartQuiz() {
+
+
+    questions = [];
+
+    currentQuestion = 0;
+
+    score = 0;
+
+    quizFinished = false;
+
+
+    addAIMessage(
+
+        "🤖 Sure! Tell me another subject and how many questions you want."
+
+    );
+
+}
+
+
+
+/* =====================================================
+   ESCAPE HTML
+===================================================== */
+
+function escapeHTML(text) {
+
+
+    const div = document.createElement("div");
+
+    div.textContent = text;
+
+    return div.innerHTML;
+
+}
+
+
+</script>
+
+
+</body>
+
+</html>
