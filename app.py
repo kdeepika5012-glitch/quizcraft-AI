@@ -29,8 +29,8 @@ if GEMINI_API_KEY:
         api_key=GEMINI_API_KEY
     )
 
-PRIMARY_MODEL = "gemini-2.5-flash"
-FALLBACK_MODEL = "gemini-2.5-flash-lite"
+PRIMARY_MODEL = "gemini-3,6-flash"
+FALLBACK_MODEL = "gemini-3.5-flash-lite"
 
 
 # =========================================================
