@@ -1,24 +1,15 @@
 from flask import Flask, render_template, request, jsonify
-
 import firebase_admin
 from firebase_admin import credentials, firestore
-
 import os
 import json
 import re
 import random
 import time
-
 from dotenv import load_dotenv
 from google import genai
 
-
-# =========================================================
-# APP
-# =========================================================
-
 app = Flask(__name__)
-
 
 # =========================================================
 # ENVIRONMENT
@@ -26,15 +17,10 @@ app = Flask(__name__)
 
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 if not GEMINI_API_KEY:
     print("WARNING: GEMINI_API_KEY not found.")
-
-
-# =========================================================
-# GEMINI
-# =========================================================
 
 client = None
 
@@ -43,8 +29,6 @@ if GEMINI_API_KEY:
         api_key=GEMINI_API_KEY
     )
 
-
-# Use models available through Gemini API
 PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-2.5-flash-lite"
 
@@ -53,7 +37,9 @@ FALLBACK_MODEL = "gemini-2.5-flash-lite"
 # FIREBASE
 # =========================================================
 
-FIREBASE_KEY_PATHS = [
+db = None
+
+firebase_paths = [
     "/etc/secrets/firebase-key.json",
     os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
@@ -62,23 +48,25 @@ FIREBASE_KEY_PATHS = [
     "firebase-key.json"
 ]
 
-firebase_key_path = next(
-    (
-        path
-        for path in FIREBASE_KEY_PATHS
-        if os.path.exists(path)
-    ),
-    None
-)
+firebase_key_path = None
 
-db = None
+for path in firebase_paths:
+    if os.path.exists(path):
+        firebase_key_path = path
+        break
 
 try:
-    firebase_admin.get_app()
 
-except ValueError:
+    if firebase_admin._apps:
 
-    if firebase_key_path:
+        db = firestore.client()
+
+        print(
+            "Firebase already initialized."
+        )
+
+    elif firebase_key_path:
+
         print(
             "Firebase key found:",
             firebase_key_path
@@ -92,25 +80,26 @@ except ValueError:
             cred
         )
 
+        db = firestore.client()
+
+        print(
+            "Firebase connected successfully."
+        )
+
     else:
+
         print(
             "WARNING: firebase-key.json not found."
         )
 
-
-try:
-    if firebase_admin._apps:
-        db = firestore.client()
-        print("Firebase connected successfully.")
-    else:
-        db = None
-
 except Exception as e:
+
+    db = None
+
     print(
         "Firebase connection error:",
         e
     )
-    db = None
 
 
 # =========================================================
@@ -119,12 +108,11 @@ except Exception as e:
 
 CODING_KEYWORDS = [
 
-    # Programming languages
+    # Programming Languages
     "python",
     "java",
     "javascript",
     "typescript",
-    "c",
     "c++",
     "cpp",
     "c#",
@@ -132,12 +120,11 @@ CODING_KEYWORDS = [
     "php",
     "ruby",
     "golang",
-    "go programming",
     "rust",
     "kotlin",
     "swift",
 
-    # Web development
+    # Web
     "html",
     "css",
     "react",
@@ -169,7 +156,7 @@ CODING_KEYWORDS = [
     "firestore",
     "oracle",
 
-    # Computer science
+    # Computer Science
     "dsa",
     "data structures",
     "data structure",
@@ -179,11 +166,13 @@ CODING_KEYWORDS = [
     "oop",
     "object oriented programming",
 
-    # Technical
+    # Systems
     "operating system",
     "operating systems",
     "computer networks",
     "networking",
+
+    # Development
     "api",
     "rest api",
     "rest",
@@ -194,31 +183,33 @@ CODING_KEYWORDS = [
     "aws",
     "azure",
     "gcp",
+
+    # AI
     "machine learning",
     "artificial intelligence",
+    "deep learning",
+    "neural network",
+
+    # Security
     "cyber security",
     "cybersecurity",
+
+    # Other
     "linux",
     "computer science",
     "programming",
     "coding",
-
-    # Software engineering
     "software engineering",
     "software development",
     "debugging",
     "debug",
     "data science",
-    "deep learning",
-    "neural network",
     "computer architecture",
     "compiler",
-    "virtual machine",
     "jvm",
     "jre",
     "jdk",
     "microservices",
-    "api development",
     "web development",
     "frontend",
     "backend",
@@ -236,19 +227,15 @@ def is_coding_topic(text):
 
     for keyword in CODING_KEYWORDS:
 
-        pattern = r"\b" + re.escape(keyword) + r"\b"
+        if keyword in text_lower:
 
-        if re.search(
-            pattern,
-            text_lower
-        ):
             return True
 
     return False
 
 
 # =========================================================
-# GET QUESTION COUNT
+# QUESTION COUNT
 # =========================================================
 
 def get_question_count(text):
@@ -258,45 +245,52 @@ def get_question_count(text):
         text
     )
 
-    if match:
+    if not match:
 
-        count = int(
-            match.group(1)
-        )
+        return 5
 
-        if count < 1:
-            return 5
+    count = int(
+        match.group(1)
+    )
 
-        # Safety limit
-        if count > 100:
-            return 100
+    if count < 1:
 
-        return count
+        return 5
 
-    return 5
+    if count > 100:
+
+        return 100
+
+    return count
 
 
 # =========================================================
-# GET DIFFICULTY
+# DIFFICULTY
 # =========================================================
 
 def get_difficulty(text):
 
     text_lower = text.lower()
 
-    if (
-        "hard" in text_lower
-        or "complex" in text_lower
-        or "difficult" in text_lower
-        or "advanced" in text_lower
-        or "challenging" in text_lower
+    if any(
+        word in text_lower
+        for word in [
+            "hard",
+            "complex",
+            "difficult",
+            "advanced",
+            "challenging"
+        ]
     ):
+
         return "Hard"
 
     if "easy" in text_lower:
+
         return "Easy"
 
     if "medium" in text_lower:
+
         return "Medium"
 
     return "Mixed"
@@ -308,17 +302,41 @@ def get_difficulty(text):
 
 def get_topic(text):
 
-    text_lower = text.lower()
+    topic = text.lower()
 
-    topic = re.sub(
-        r"\b("
-        r"give|me|a|an|the|question|questions|quiz|for|about|"
-        r"please|can|you|create|generate|make|"
-        r"easy|medium|hard|complex|difficult|advanced|challenging"
-        r")\b",
-        " ",
-        text_lower
-    )
+    remove_words = [
+        "give",
+        "me",
+        "a",
+        "an",
+        "the",
+        "question",
+        "questions",
+        "quiz",
+        "for",
+        "about",
+        "please",
+        "can",
+        "you",
+        "create",
+        "generate",
+        "make",
+        "easy",
+        "medium",
+        "hard",
+        "complex",
+        "difficult",
+        "advanced",
+        "challenging"
+    ]
+
+    for word in remove_words:
+
+        topic = re.sub(
+            r"\b" + re.escape(word) + r"\b",
+            " ",
+            topic
+        )
 
     topic = re.sub(
         r"\b\d+\b",
@@ -333,25 +351,27 @@ def get_topic(text):
     ).strip()
 
     if not topic:
-        topic = text.strip()
+
+        return text.strip()
 
     return topic
 
 
 # =========================================================
-# CLEAN GEMINI RESPONSE
+# CLEAN JSON RESPONSE
 # =========================================================
 
 def clean_json_response(text):
 
     if not text:
+
         raise Exception(
             "Gemini returned an empty response."
         )
 
     text = text.strip()
 
-    # Remove markdown code fences
+    # Remove markdown code blocks
     text = re.sub(
         r"```json",
         "",
@@ -371,6 +391,7 @@ def clean_json_response(text):
     end = text.rfind("}")
 
     if start == -1 or end == -1:
+
         raise Exception(
             "Gemini did not return valid JSON."
         )
@@ -379,7 +400,7 @@ def clean_json_response(text):
         start:end + 1
     ]
 
-    # Validate JSON
+    # Test JSON
     json.loads(
         json_text
     )
@@ -391,66 +412,53 @@ def clean_json_response(text):
 # VALIDATE QUESTIONS
 # =========================================================
 
-def validate_questions(
-    questions,
-    expected_count
-):
+def validate_questions(questions):
 
     valid_questions = []
 
-    seen_questions = set()
+    seen = set()
 
-    for q in questions:
+    for item in questions:
 
         if not isinstance(
-            q,
+            item,
             dict
         ):
+
             continue
 
-        question_text = str(
-            q.get(
+        question = str(
+            item.get(
                 "question",
                 ""
             )
         ).strip()
 
-        options = q.get(
+        options = item.get(
             "options",
             []
         )
 
         answer = str(
-            q.get(
+            item.get(
                 "answer",
                 ""
             )
         ).strip()
 
-        # Question check
-        if not question_text:
+        if not question:
+
             continue
 
-        # Duplicate question check
-        question_key = (
-            question_text.lower()
-        )
-
-        if question_key in seen_questions:
-            continue
-
-        seen_questions.add(
-            question_key
-        )
-
-        # Options check
         if not isinstance(
             options,
             list
         ):
+
             continue
 
         if len(options) != 4:
+
             continue
 
         options = [
@@ -458,15 +466,29 @@ def validate_questions(
             for option in options
         ]
 
-        # Duplicate options
-        if len(set(options)) != 4:
+        if len(
+            set(options)
+        ) != 4:
+
             continue
 
-        # Answer check
         if answer not in options:
+
             continue
 
-        # Shuffle options
+        question_key = (
+            question.lower()
+        )
+
+        if question_key in seen:
+
+            continue
+
+        seen.add(
+            question_key
+        )
+
+        # Randomize correct answer position
         random.shuffle(
             options
         )
@@ -474,7 +496,7 @@ def validate_questions(
         valid_questions.append({
 
             "question":
-                question_text,
+                question,
 
             "options":
                 options,
@@ -488,35 +510,38 @@ def validate_questions(
 
 
 # =========================================================
-# GEMINI REQUEST
+# CALL GEMINI
 # =========================================================
 
-def call_gemini_with_retry(prompt):
+def call_gemini(prompt):
 
     if client is None:
+
         raise Exception(
-            "Gemini API key is missing."
+            "GEMINI_API_KEY is missing."
         )
 
-    models_to_try = [
+    models = [
         PRIMARY_MODEL,
         FALLBACK_MODEL
     ]
 
     last_error = None
 
-    for model_name in models_to_try:
+    for model_name in models:
 
         for attempt in range(3):
 
             try:
 
                 print(
-                    f"Trying model: {model_name}"
+                    "Gemini model:",
+                    model_name
                 )
 
                 print(
-                    f"Attempt: {attempt + 1}/3"
+                    "Attempt:",
+                    attempt + 1
                 )
 
                 response = (
@@ -531,6 +556,7 @@ def call_gemini_with_retry(prompt):
                 )
 
                 if response is None:
+
                     raise Exception(
                         "Empty Gemini response."
                     )
@@ -538,13 +564,10 @@ def call_gemini_with_retry(prompt):
                 text = response.text
 
                 if not text:
+
                     raise Exception(
                         "Gemini returned empty text."
                     )
-
-                print(
-                    f"SUCCESS: {model_name}"
-                )
 
                 return text
 
@@ -552,46 +575,41 @@ def call_gemini_with_retry(prompt):
 
                 last_error = e
 
-                error_text = str(e)
-
                 print(
                     "Gemini error:",
-                    error_text
+                    e
                 )
 
-                temporary_error = (
-                    "503" in error_text
-                    or "UNAVAILABLE" in error_text
-                    or "429" in error_text
+                error_text = str(e).upper()
+
+                temporary = (
+                    "429" in error_text
+                    or "500" in error_text
+                    or "503" in error_text
+                    or "UNAVAILABLE"
+                    in error_text
                     or "RESOURCE_EXHAUSTED"
                     in error_text
-                    or "500" in error_text
                     or "INTERNAL"
                     in error_text
                 )
 
-                if temporary_error:
+                if temporary:
 
                     wait_time = (
                         2 ** attempt
-                    )
-
-                    print(
-                        f"Retrying in "
-                        f"{wait_time} seconds..."
                     )
 
                     time.sleep(
                         wait_time
                     )
 
-                    continue
+                else:
 
-                break
+                    break
 
     raise Exception(
-        f"Gemini generation failed: "
-        f"{last_error}"
+        f"Gemini generation failed: {last_error}"
     )
 
 
@@ -601,100 +619,60 @@ def call_gemini_with_retry(prompt):
 
 def generate_quiz_batch(
     topic,
-    batch_count,
-    difficulty,
-    batch_number
+    count,
+    difficulty
 ):
 
     prompt = f"""
 You are QuizCraft AI.
 
-You are ONLY a coding and computer-science quiz generator.
+Generate a multiple-choice programming quiz.
 
-The user requested a quiz about:
-
+Topic:
 {topic}
-
-Generate exactly {batch_count} questions.
 
 Difficulty:
 {difficulty}
 
-Batch:
-{batch_number}
+Number of questions:
+{count}
 
 STRICT RULES:
 
-1. Every question MUST be directly related to:
+1. Generate EXACTLY {count} questions.
+
+2. Questions MUST be directly related to:
 {topic}
 
-2. Only coding, programming, software development,
-computer science, databases, web development,
-APIs, cloud, cybersecurity, machine learning,
-or closely related technical subjects are allowed.
+3. Only technical/coding questions.
 
-3. Do NOT create unrelated questions.
-
-4. Every question MUST have exactly 4 options.
+4. Every question must have EXACTLY
+4 different options.
 
 5. Exactly ONE option must be correct.
 
-6. The correct answer must be randomly distributed
-among the four options.
+6. The answer must exactly match
+one of the four options.
 
-7. Do NOT always put the correct answer first.
+7. Randomize the correct answer position.
 
-8. Do NOT repeat questions.
+8. Do not always put the correct answer
+as Option A.
 
-9. Questions must be technically accurate.
+9. Do not repeat questions.
 
-10. Use different question styles:
-- conceptual
-- code output
-- debugging
-- practical programming
-- problem solving
-- scenario based
+10. Questions must be technically accurate.
 
-11. If difficulty is Hard, make questions genuinely challenging.
+11. Include conceptual, practical,
+debugging, code-output and
+problem-solving questions when suitable.
 
-12. For Python, when appropriate include:
-variables, data types, lists, tuples, dictionaries,
-sets, loops, functions, lambda, exceptions,
-classes, inheritance, decorators, generators,
-iterators, modules, file handling,
-comprehensions, async programming and debugging.
+12. Hard questions must genuinely
+be challenging.
 
-13. For Java, when appropriate include:
-classes, objects, inheritance, polymorphism,
-abstraction, interfaces, exceptions,
-collections, generics, threads, JVM,
-memory and streams.
+13. Return ONLY valid JSON.
 
-14. For JavaScript, when appropriate include:
-let, const, var, functions, closures,
-arrays, objects, DOM, promises,
-async/await, callbacks and event loop.
-
-15. For C/C++, when appropriate include:
-pointers, memory, arrays, functions,
-classes, STL and references.
-
-16. For SQL, when appropriate include:
-queries, joins, subqueries, aggregation,
-GROUP BY, HAVING and indexes.
-
-17. For HTML/CSS, ask real technical
-web-development questions.
-
-18. Do NOT create meaningless questions.
-
-19. Do NOT ask generic questions such as:
-"What is an important topic related to X?"
-
-20. Return ONLY valid JSON.
-
-Use EXACTLY this structure:
+Return EXACTLY this structure:
 
 {{
     "questions": [
@@ -706,18 +684,18 @@ Use EXACTLY this structure:
                 "Option C",
                 "Option D"
             ],
-            "answer": "Exactly one of the four options"
+            "answer": "Correct option"
         }}
     ]
 }}
 """
 
-    text = call_gemini_with_retry(
+    raw_response = call_gemini(
         prompt
     )
 
     json_text = clean_json_response(
-        text
+        raw_response
     )
 
     data = json.loads(
@@ -733,18 +711,18 @@ Use EXACTLY this structure:
         questions,
         list
     ):
+
         raise Exception(
             "Invalid questions format."
         )
 
     return validate_questions(
-        questions,
-        batch_count
+        questions
     )
 
 
 # =========================================================
-# GENERATE QUIZ
+# GENERATE COMPLETE QUIZ
 # =========================================================
 
 def generate_ai_quiz(
@@ -759,35 +737,20 @@ def generate_ai_quiz(
 
     all_questions = []
 
-    BATCH_SIZE = 10
+    batch_size = 10
 
-    total_batches = (
-        (count + BATCH_SIZE - 1)
-        // BATCH_SIZE
+    required_batches = (
+        (count + batch_size - 1)
+        // batch_size
     )
 
-    print(
-        "===================================="
+    # Extra attempts if Gemini returns fewer
+    max_batches = (
+        required_batches + 3
     )
 
-    print(
-        f"Topic: {topic}"
-    )
-
-    print(
-        f"Total questions: {count}"
-    )
-
-    print(
-        f"Total batches: {total_batches}"
-    )
-
-    print(
-        "===================================="
-    )
-
-    for batch_index in range(
-        total_batches
+    for batch_number in range(
+        max_batches
     ):
 
         remaining = (
@@ -795,68 +758,70 @@ def generate_ai_quiz(
             - len(all_questions)
         )
 
-        current_batch_size = min(
-            BATCH_SIZE,
-            remaining
-        )
+        if remaining <= 0:
 
-        if current_batch_size <= 0:
             break
 
-        print(
-            f"Generating batch "
-            f"{batch_index + 1}/"
-            f"{total_batches}"
+        current_count = min(
+            batch_size,
+            remaining
         )
 
         try:
 
-            batch_questions = (
-                generate_quiz_batch(
-                    topic,
-                    current_batch_size,
-                    difficulty,
-                    batch_index + 1
-                )
+            batch = generate_quiz_batch(
+                topic,
+                current_count,
+                difficulty
             )
 
-            existing = {
+            existing_questions = {
                 q["question"].lower()
                 for q in all_questions
             }
 
-            for q in batch_questions:
+            for question in batch:
 
-                question_key = (
-                    q["question"].lower()
+                key = (
+                    question["question"]
+                    .lower()
                 )
 
-                if question_key not in existing:
+                if key not in existing_questions:
 
                     all_questions.append(
-                        q
+                        question
                     )
 
-                    existing.add(
-                        question_key
+                    existing_questions.add(
+                        key
                     )
+
+                    if len(
+                        all_questions
+                    ) >= count:
+
+                        break
 
         except Exception as e:
 
             print(
                 "Batch error:",
-                repr(e)
+                e
             )
 
-            if not all_questions:
-                raise
+            # Continue trying another batch
+            continue
 
     if not all_questions:
+
         raise Exception(
             "No valid questions generated."
         )
 
-    return all_questions[:count]
+    return all_questions[
+        :count
+    ]
 
 
 # =========================================================
@@ -872,7 +837,7 @@ def home():
 
 
 # =========================================================
-# GENERATE QUIZ API
+# GENERATE QUIZ
 # =========================================================
 
 @app.route(
@@ -883,70 +848,97 @@ def generate_quiz():
 
     try:
 
-        # Get JSON
-        data = request.get_json()
+        data = request.get_json(
+            silent=True
+        )
 
         if not data:
 
             return jsonify({
-                "success": False,
+
+                "success":
+                    False,
+
                 "error":
                     "No data received."
+
             }), 400
 
-        user_request = data.get(
-            "subject",
-            ""
+        user_request = str(
+            data.get(
+                "subject",
+                ""
+            )
         ).strip()
 
         if not user_request:
 
             return jsonify({
-                "success": False,
+
+                "success":
+                    False,
+
                 "error":
                     "Please enter a coding topic."
+
             }), 400
 
-        # Coding topic check
+        # Only coding topics
         if not is_coding_topic(
             user_request
         ):
 
             return jsonify({
-                "success": False,
+
+                "success":
+                    False,
+
                 "error":
                     "I don't know. "
                     "I can only help with "
                     "coding-related quizzes."
+
             }), 400
 
-        # Question count
         count = get_question_count(
             user_request
         )
 
-        # Difficulty
         difficulty = get_difficulty(
             user_request
         )
 
         print(
-            "===================================="
+            "================================"
         )
 
         print(
-            f"User request: {user_request}"
+            "User request:",
+            user_request
         )
 
         print(
-            f"Question count: {count}"
+            "Topic:",
+            get_topic(
+                user_request
+            )
         )
 
         print(
-            f"Difficulty: {difficulty}"
+            "Questions:",
+            count
         )
 
-        # Generate questions
+        print(
+            "Difficulty:",
+            difficulty
+        )
+
+        print(
+            "================================"
+        )
+
+        # Generate quiz
         questions = generate_ai_quiz(
             user_request,
             count,
@@ -956,10 +948,13 @@ def generate_quiz():
         if not questions:
 
             return jsonify({
-                "success": False,
+
+                "success":
+                    False,
+
                 "error":
-                    "Questions could not be generated. "
-                    "Please try again."
+                    "No questions generated."
+
             }), 500
 
         # =================================================
@@ -991,6 +986,7 @@ def generate_quiz():
 
                     "created_at":
                         firestore.SERVER_TIMESTAMP
+
                 }
 
                 db.collection(
@@ -1006,21 +1002,15 @@ def generate_quiz():
             except Exception as firebase_error:
 
                 print(
-                    "Firebase error:",
+                    "Firebase save error:",
                     firebase_error
                 )
 
-        else:
-
-            print(
-                "Firebase not connected. "
-                "Quiz will still be returned."
-            )
-
-        # Send to HTML
+        # Return quiz
         return jsonify({
 
-            "success": True,
+            "success":
+                True,
 
             "subject":
                 get_topic(
@@ -1038,41 +1028,25 @@ def generate_quiz():
 
         })
 
-    except json.JSONDecodeError as e:
-
-        print(
-            "JSON ERROR:",
-            repr(e)
-        )
-
-        return jsonify({
-
-            "success": False,
-
-            "error":
-                "AI returned invalid JSON. "
-                "Please try again."
-
-        }), 500
-
     except Exception as e:
 
         print(
-            "===================================="
+            "================================"
         )
 
         print(
-            "ERROR:",
+            "SERVER ERROR:",
             repr(e)
         )
 
         print(
-            "===================================="
+            "================================"
         )
 
         return jsonify({
 
-            "success": False,
+            "success":
+                False,
 
             "error":
                 str(e)
@@ -1081,13 +1055,13 @@ def generate_quiz():
 
 
 # =========================================================
-# RUN APPLICATION
+# RUN
 # =========================================================
 
 if __name__ == "__main__":
 
     print(
-        "===================================="
+        "================================"
     )
 
     print(
@@ -1099,15 +1073,7 @@ if __name__ == "__main__":
     )
 
     print(
-        f"Primary Model: {PRIMARY_MODEL}"
-    )
-
-    print(
-        f"Fallback Model: {FALLBACK_MODEL}"
-    )
-
-    print(
-        "===================================="
+        "================================"
     )
 
     port = int(
@@ -1118,7 +1084,7 @@ if __name__ == "__main__":
     )
 
     app.run(
-        debug=False,
         host="0.0.0.0",
-        port=port
+        port=port,
+        debug=False
     )
